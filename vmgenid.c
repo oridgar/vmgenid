@@ -1,11 +1,20 @@
-// SPDX-License-Identifier: GPL-2.0
+/*
+ * Virtual Machine Generation ID device
+ *
+ * Copyright (C) 2018 Red Hat, Inc. All rights reserved.
+ *	Authors:
+ *	  Or Idgar <oridgar@gmail.com>
+ *	  Gal Hammer <ghammer@redhat.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ */
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/acpi.h>
 #include <linux/uuid.h>
-#include <linux/device.h>
-#include <linux/miscdevice.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Or Idgar <oridgar@gmail.com>");
@@ -15,7 +24,6 @@ MODULE_VERSION("0.1");
 
 ACPI_MODULE_NAME("vmgenid");
 
-static struct kobject *vmgenid_kobj;
 static u64 phy_addr;
 
 static ssize_t sysfs_vmgenid_str_show(struct kobject *kobj,
@@ -74,13 +82,30 @@ static int get_vmgenid(acpi_handle handle)
 	return 0;
 }
 
+static struct kobj_attribute vmgenid_attribute =
+	__ATTR(generation_id, 0440, sysfs_vmgenid_str_show, NULL);
+static struct kobj_attribute vmgenid_raw_attr =
+	__ATTR(raw, 0440, sysfs_vmgenid_raw_show, NULL);
+
 static int acpi_vmgenid_add(struct acpi_device *device)
 {
+	int error;
+
+	if (!device)
+		return -EINVAL;
+	error = sysfs_create_file(&(device->dev.kobj), &vmgenid_attribute.attr);
+	if (error)
+		return error;
+	error = sysfs_create_file(&(device->dev.kobj), &vmgenid_raw_attr.attr);
+	if (error)
+		return error;
 	return get_vmgenid(device->handle);
 }
 
 static int acpi_vmgenid_remove(struct acpi_device *device)
 {
+	sysfs_remove_file(&(device->dev.kobj), &vmgenid_attribute.attr);
+	sysfs_remove_file(&(device->dev.kobj), &vmgenid_raw_attr.attr);
 	return 0;
 }
 
@@ -105,32 +130,13 @@ static struct acpi_driver acpi_vmgenid_driver = {
 	}
 };
 
-static struct kobj_attribute vmgenid_attribute =
-	__ATTR(generation_id, 0440, sysfs_vmgenid_str_show, NULL);
-static struct kobj_attribute vmgenid_raw_attr =
-	__ATTR(raw, 0440, sysfs_vmgenid_raw_show, NULL);
-
 static int __init vmgenid_init(void)
 {
-	int error = 0;
-	vmgenid_kobj = kobject_create_and_add("vm_gen_counter", kernel_kobj);
-	if (!vmgenid_kobj)
-		return -ENOMEM;
-	error = sysfs_create_file(vmgenid_kobj, &vmgenid_attribute.attr);
-	if (error)
-		return -EFAULT;
-	error = sysfs_create_file(vmgenid_kobj, &vmgenid_raw_attr.attr);
-	if (error)
-		return -EFAULT;
-	error = acpi_bus_register_driver(&acpi_vmgenid_driver);
-	if (error < 0)
-		return error;
-	return 0;
+	return acpi_bus_register_driver(&acpi_vmgenid_driver);
 }
 
 static void __exit vmgenid_exit(void)
 {
-	kobject_put(vmgenid_kobj);
 	acpi_bus_unregister_driver(&acpi_vmgenid_driver);
 }
 
