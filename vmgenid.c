@@ -105,7 +105,7 @@ static int acpi_vmgenid_add(struct acpi_device *device)
 
 static int acpi_vmgenid_remove(struct acpi_device *device)
 {
-	sysfs_remove_group(&(device->dev.kobj), *vmgenid_dev_groups);
+	sysfs_remove_group(&device->dev.kobj, *vmgenid_dev_groups);
 	return 0;
 }
 
