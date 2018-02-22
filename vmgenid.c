@@ -26,8 +26,8 @@ ACPI_MODULE_NAME("vmgenid");
 
 static u64 phy_addr;
 
-static ssize_t sysfs_vmgenid_str_show(struct kobject *kobj,
-			      struct kobj_attribute *attr, char *buf)
+static ssize_t generation_id_show(struct device *_d,
+			      struct device_attribute *attr, char *buf)
 {
 	uuid_t *uuidp;
 	ssize_t result;
@@ -40,9 +40,10 @@ static ssize_t sysfs_vmgenid_str_show(struct kobject *kobj,
 	acpi_os_unmap_iomem(uuidp, sizeof(uuid_t));
 	return result;
 }
+static DEVICE_ATTR_RO(generation_id);
 
-static ssize_t sysfs_vmgenid_raw_show(struct kobject *kobj,
-			      struct kobj_attribute *attr,
+static ssize_t raw_show(struct device *_d,
+			struct device_attribute *attr,
 			      char *buf)
 {
 	uuid_t *uuidp;
@@ -54,6 +55,14 @@ static ssize_t sysfs_vmgenid_raw_show(struct kobject *kobj,
 	acpi_os_unmap_iomem(uuidp, sizeof(uuid_t));
 	return sizeof(uuid_t);
 }
+static DEVICE_ATTR_RO(raw);
+
+static struct attribute *vmgenid_dev_attrs[] = {
+	&dev_attr_generation_id.attr,
+	&dev_attr_raw.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(vmgenid_dev);
 
 static int get_vmgenid(acpi_handle handle)
 {
@@ -82,21 +91,13 @@ static int get_vmgenid(acpi_handle handle)
 	return 0;
 }
 
-static struct kobj_attribute vmgenid_attribute =
-	__ATTR(generation_id, 0440, sysfs_vmgenid_str_show, NULL);
-static struct kobj_attribute vmgenid_raw_attr =
-	__ATTR(raw, 0440, sysfs_vmgenid_raw_show, NULL);
-
 static int acpi_vmgenid_add(struct acpi_device *device)
 {
 	int error;
 
 	if (!device)
 		return -EINVAL;
-	error = sysfs_create_file(&(device->dev.kobj), &vmgenid_attribute.attr);
-	if (error)
-		return error;
-	error = sysfs_create_file(&(device->dev.kobj), &vmgenid_raw_attr.attr);
+	error = sysfs_create_group(&(device->dev.kobj), *vmgenid_dev_groups);
 	if (error)
 		return error;
 	return get_vmgenid(device->handle);
@@ -104,8 +105,7 @@ static int acpi_vmgenid_add(struct acpi_device *device)
 
 static int acpi_vmgenid_remove(struct acpi_device *device)
 {
-	sysfs_remove_file(&(device->dev.kobj), &vmgenid_attribute.attr);
-	sysfs_remove_file(&(device->dev.kobj), &vmgenid_raw_attr.attr);
+	sysfs_remove_group(&(device->dev.kobj), *vmgenid_dev_groups);
 	return 0;
 }
 
